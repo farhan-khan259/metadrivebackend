@@ -30,6 +30,7 @@ app.use(
 		origin: [
 			"http://localhost:3000",
 			"https://solarx0.com",
+			"https://solarfullfrontend.vercel.app",
 			"https://www.solarx0.com",
 		],
 		methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
