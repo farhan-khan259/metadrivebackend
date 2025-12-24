@@ -1,28 +1,16 @@
 {
   "name": "solar",
   "version": "1.0.0",
-  "description": "",
-  "homepage": "https://github.com/ahmedosm0/solar_project#readme",
-  "bugs": {
-    "url": "https://github.com/ahmedosm0/solar_project/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/ahmedosm0/solar_project.git"
-  },
-  "license": "ISC",
-  "author": "",
-  "type": "commonjs",
   "main": "index.js",
+  "type": "commonjs",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "nodemon index.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
-    "dotenv": "^16.0.0",
+    "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.1",
