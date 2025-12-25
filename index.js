@@ -89,7 +89,7 @@
 
 
 
-require("dotenv").config(); // Load env variables first
+require("dotenv").config();
 
 const express = require("express");
 const mongoose = require("mongoose");
@@ -100,7 +100,7 @@ const cron = require("node-cron");
 const app = express();
 
 /* ======================================================
-   ✅ CORS CONFIGURATION — PRODUCTION SAFE
+   ✅ CORS (EXPRESS v5 SAFE)
 ====================================================== */
 
 const allowedOrigins = [
@@ -110,24 +110,30 @@ const allowedOrigins = [
 	"https://metadrive01.xyz"
 ];
 
-app.use(cors({
-	origin: function (origin, callback) {
-		// allow server-to-server, Postman, curl
-		if (!origin) return callback(null, true);
+app.use((req, res, next) => {
+	const origin = req.headers.origin;
 
-		if (allowedOrigins.includes(origin)) {
-			return callback(null, true);
-		} else {
-			return callback(new Error("CORS policy blocked this origin"));
-		}
-	},
-	methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-	allowedHeaders: ["Content-Type", "Authorization"],
-	credentials: true
-}));
+	if (allowedOrigins.includes(origin)) {
+		res.header("Access-Control-Allow-Origin", origin);
+	}
 
-// ✅ REQUIRED for browser preflight requests
-app.options("*", cors());
+	res.header("Access-Control-Allow-Credentials", "true");
+	res.header(
+		"Access-Control-Allow-Headers",
+		"Origin, X-Requested-With, Content-Type, Accept, Authorization"
+	);
+	res.header(
+		"Access-Control-Allow-Methods",
+		"GET, POST, PUT, PATCH, DELETE, OPTIONS"
+	);
+
+	// ✅ Handle preflight safely (NO "*")
+	if (req.method === "OPTIONS") {
+		return res.sendStatus(204);
+	}
+
+	next();
+});
 
 /* ======================================================
    ✅ BODY PARSERS
@@ -137,12 +143,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 /* ======================================================
-   ✅ MONGODB CONNECTION
+   ✅ MONGODB
 ====================================================== */
 
-mongoose.connect(process.env.MONGO_URI)
+mongoose
+	.connect(process.env.MONGO_URI)
 	.then(() => console.log("✅ MongoDB Connected"))
-	.catch(err => console.error("❌ MongoDB Connection Error:", err));
+	.catch((err) => console.error("❌ MongoDB Error:", err));
 
 /* ======================================================
    ✅ STATIC FILES
@@ -154,43 +161,29 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
    ✅ ROUTES
 ====================================================== */
 
-const authRoutes = require("./routes/user");
-const paymentRoutes = require("./routes/payment");
-const bindRoutes = require("./routes/bindAccountRoutes");
-const teamDetailsRoutes = require("./routes/Teamdetails");
-const planRoutes = require("./routes/plain");
-const commissionRoutes = require("./routes/commissionRoutes");
-const adminRoutes = require("./routes/adminRoutes");
-const announcementRoutes = require("./routes/announcementRoutes");
-const userHistory = require("./routes/userHistory");
-
-app.use("/api", authRoutes);
-app.use("/api", userHistory);
-app.use("/team", teamDetailsRoutes);
-app.use("/api/plans", planRoutes);
-app.use("/api", paymentRoutes);
-app.use("/api/bindAccountRoutes", bindRoutes);
-app.use("/api/commission", commissionRoutes);
-app.use("/api", adminRoutes);
-app.use("/api", announcementRoutes);
+app.use("/api", require("./routes/user"));
+app.use("/api", require("./routes/userHistory"));
+app.use("/team", require("./routes/Teamdetails"));
+app.use("/api/plans", require("./routes/plain"));
+app.use("/api", require("./routes/payment"));
+app.use("/api/bindAccountRoutes", require("./routes/bindAccountRoutes"));
+app.use("/api/commission", require("./routes/commissionRoutes"));
+app.use("/api", require("./routes/adminRoutes"));
+app.use("/api", require("./routes/announcementRoutes"));
 
 /* ======================================================
-   ✅ TEST ROUTES (IMPORTANT)
+   ✅ TEST ROUTES
 ====================================================== */
 
 app.get("/", (req, res) => {
-	res.send("🚀 SolarX0 Backend is running");
+	res.send("🚀 SolarX Backend is running");
 });
 
 app.get("/api/test", (req, res) => {
 	res.json({
 		success: true,
-		message: "Backend connected successfully ✅"
+		message: "Backend connected successfully ✅",
 	});
-});
-
-app.get("/api/test-claim", (req, res) => {
-	res.json({ message: "Claim reward route is working!" });
 });
 
 /* ======================================================
@@ -198,12 +191,12 @@ app.get("/api/test-claim", (req, res) => {
 ====================================================== */
 
 cron.schedule("*/5 * * * *", () => {
-	console.log("⏱️ Plan cron job executed (every 5 minutes)");
+	console.log("⏱️ Plan cron executed");
 	require("./cron/planCron");
 });
 
 cron.schedule("0 0 * * *", () => {
-	console.log("💰 Commission cron job executed (daily)");
+	console.log("💰 Commission cron executed");
 	require("./utils/commissionCron");
 });
 
