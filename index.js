@@ -89,50 +89,81 @@
 
 
 
-require("dotenv").config(); // Load environment variables first
+require("dotenv").config(); // Load env variables first
 
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const path = require("path");
+const cron = require("node-cron");
 
-// Import routes
+const app = express();
+
+/* ======================================================
+   ✅ CORS CONFIGURATION — PRODUCTION SAFE
+====================================================== */
+
+const allowedOrigins = [
+	"http://localhost:3000",
+	"https://solarfullfrontend.vercel.app",
+	"https://www.metadrive01.xyz",
+	"https://metadrive01.xyz"
+];
+
+app.use(cors({
+	origin: function (origin, callback) {
+		// allow server-to-server, Postman, curl
+		if (!origin) return callback(null, true);
+
+		if (allowedOrigins.includes(origin)) {
+			return callback(null, true);
+		} else {
+			return callback(new Error("CORS policy blocked this origin"));
+		}
+	},
+	methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+	allowedHeaders: ["Content-Type", "Authorization"],
+	credentials: true
+}));
+
+// ✅ REQUIRED for browser preflight requests
+app.options("*", cors());
+
+/* ======================================================
+   ✅ BODY PARSERS
+====================================================== */
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+/* ======================================================
+   ✅ MONGODB CONNECTION
+====================================================== */
+
+mongoose.connect(process.env.MONGO_URI)
+	.then(() => console.log("✅ MongoDB Connected"))
+	.catch(err => console.error("❌ MongoDB Connection Error:", err));
+
+/* ======================================================
+   ✅ STATIC FILES
+====================================================== */
+
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+/* ======================================================
+   ✅ ROUTES
+====================================================== */
+
 const authRoutes = require("./routes/user");
 const paymentRoutes = require("./routes/payment");
 const bindRoutes = require("./routes/bindAccountRoutes");
 const teamDetailsRoutes = require("./routes/Teamdetails");
 const planRoutes = require("./routes/plain");
-const commissionRoutes = require('./routes/commissionRoutes');
+const commissionRoutes = require("./routes/commissionRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const announcementRoutes = require("./routes/announcementRoutes");
 const userHistory = require("./routes/userHistory");
 
-const cron = require('node-cron');
-
-const app = express();
-
-// CORS — allow frontend domains
-app.use(cors({
-	origin: [
-		"http://localhost:3000",
-		"https://solarfullfrontend.vercel.app"
-	],
-	methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-	credentials: true
-}));
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// MongoDB connection (no deprecated options)
-mongoose.connect(process.env.MONGO_URI)
-	.then(() => console.log("✅ MongoDB Connected"))
-	.catch(err => console.error("❌ MongoDB Connection Error:", err));
-
-// Static folder for uploads
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
-// API Routes
 app.use("/api", authRoutes);
 app.use("/api", userHistory);
 app.use("/team", teamDetailsRoutes);
@@ -143,27 +174,46 @@ app.use("/api/commission", commissionRoutes);
 app.use("/api", adminRoutes);
 app.use("/api", announcementRoutes);
 
-// Cron Jobs — recurring schedules (won’t exit process)
-cron.schedule('*/5 * * * *', () => {
-	console.log('Plan cron job executed every 5 minutes');
-	require("./cron/planCron"); // call your planCron logic here safely
+/* ======================================================
+   ✅ TEST ROUTES (IMPORTANT)
+====================================================== */
+
+app.get("/", (req, res) => {
+	res.send("🚀 SolarX0 Backend is running");
 });
 
-cron.schedule('0 0 * * *', () => {
-	console.log('Commission cron job executed daily at midnight');
-	require('./utils/commissionCron'); // safe execution
+app.get("/api/test", (req, res) => {
+	res.json({
+		success: true,
+		message: "Backend connected successfully ✅"
+	});
 });
 
-console.log('Cron jobs scheduled');
-
-// Root test route
-app.get("/", (req, res) => res.send("Hello from SolarX0 Backend!"));
-
-// Test claim route
 app.get("/api/test-claim", (req, res) => {
 	res.json({ message: "Claim reward route is working!" });
 });
 
-// Start server
+/* ======================================================
+   ✅ CRON JOBS
+====================================================== */
+
+cron.schedule("*/5 * * * *", () => {
+	console.log("⏱️ Plan cron job executed (every 5 minutes)");
+	require("./cron/planCron");
+});
+
+cron.schedule("0 0 * * *", () => {
+	console.log("💰 Commission cron job executed (daily)");
+	require("./utils/commissionCron");
+});
+
+console.log("✅ Cron jobs scheduled");
+
+/* ======================================================
+   ✅ START SERVER
+====================================================== */
+
 const PORT = process.env.PORT || 3005;
-app.listen(PORT, () => console.log(`🚀 Server started on port ${PORT}`));
+app.listen(PORT, () => {
+	console.log(`🚀 Server started on port ${PORT}`);
+});
