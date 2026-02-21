@@ -30,7 +30,9 @@ router.get('/plan-expire-summary/:userId', async (req, res) => {
         const levelTotals = {
             level1: 0,
             level2: 0,
-            level3: 0
+            level3: 0,
+            level4: 0,
+            level5: 0,
         };
 
         // Process real transactions
@@ -57,6 +59,8 @@ router.get('/plan-expire-summary/:userId', async (req, res) => {
             if (level === 1) levelTotals.level1 += transaction.amount;
             else if (level === 2) levelTotals.level2 += transaction.amount;
             else if (level === 3) levelTotals.level3 += transaction.amount;
+            else if (level === 4) levelTotals.level4 += transaction.amount;
+            else if (level === 5) levelTotals.level5 += transaction.amount;
         });
 
         // If no transactions found, return empty but successful response
@@ -67,7 +71,7 @@ router.get('/plan-expire-summary/:userId', async (req, res) => {
                 data: {
                     summary: {
                         totalCommission: 0,
-                        levelTotals: { level1: 0, level2: 0, level3: 0 },
+                        levelTotals: { level1: 0, level2: 0, level3: 0, level4: 0, level5: 0 },
                         totalTransactions: 0
                     },
                     transactions: []

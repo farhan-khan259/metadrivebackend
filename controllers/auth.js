@@ -20,105 +20,105 @@ const transporter = nodemailer.createTransport({
 
 // ================== 🧾 SIGNUP ==================
 // exports.signup = async (req, res) => {
-// 	try {
-// 		const { fullName, email, password, refercode, whatsappNumber } = req.body;
+//      try {
+//              const { fullName, email, password, refercode, whatsappNumber } = req.body;
 
-// 		// Check for existing user
-// 		const existingUser = await User.findOne({ email });
-// 		if (existingUser) {
-// 			return res.status(400).json({ message: "Email already registered" });
-// 		}
+//              // Check for existing user
+//              const existingUser = await User.findOne({ email });
+//              if (existingUser) {
+//                      return res.status(400).json({ message: "Email already registered" });
+//              }
 
-// 		// Referral check
-// 		if (refercode) {
-// 			const refUser = await User.findOne({ randomCode: refercode });
-// 			if (!refUser) {
-// 				return res.status(400).json({ message: "Invalid referral code" });
-// 			}
-// 		}
+//              // Referral check
+//              if (refercode) {
+//                      const refUser = await User.findOne({ randomCode: refercode });
+//                      if (!refUser) {
+//                              return res.status(400).json({ message: "Invalid referral code" });
+//                      }
+//              }
 
-// 		// Hash password before saving
-// 		const hashedPassword = await bcrypt.hash(password, 10);
+//              // Hash password before saving
+//              const hashedPassword = await bcrypt.hash(password, 10);
 
-// 		const newUser = new User({
-// 			fullName,
-// 			email,
-// 			password: hashedPassword,
-// 			whatsappNumber,
-// 			referredBy: refercode,
-// 		});
-// 		await newUser.save();
+//              const newUser = new User({
+//                      fullName,
+//                      email,
+//                      password: hashedPassword,
+//                      whatsappNumber,
+//                      referredBy: refercode,
+//              });
+//              await newUser.save();
 
-// 		// Add referral link
-// 		if (refercode) {
-// 			const refUser = await User.findOne({ randomCode: refercode });
-// 			if (refUser) {
-// 				refUser.team.push(newUser.randomCode);
-// 				await refUser.save();
-// 			}
-// 		}
+//              // Add referral link
+//              if (refercode) {
+//                      const refUser = await User.findOne({ randomCode: refercode });
+//                      if (refUser) {
+//                              refUser.team.push(newUser.randomCode);
+//                              await refUser.save();
+//                      }
+//              }
 
-// 		res.status(201).json({
-// 			message: "User registered successfully",
-// 			user: newUser,
-// 			userPlanlength: 0,
-// 		});
-// 	} catch (err) {
-// 		res.status(500).json({ message: err.message });
-// 	}
+//              res.status(201).json({
+//                      message: "User registered successfully",
+//                      user: newUser,
+//                      userPlanlength: 0,
+//              });
+//      } catch (err) {
+//              res.status(500).json({ message: err.message });
+//      }
 // };
 
 
 // exports.signup = async (req, res) => {
-// 	try {
-// 		const { fullName, email, password, refercode, whatsappNumber } = req.body;
+//      try {
+//              const { fullName, email, password, refercode, whatsappNumber } = req.body;
 
-// 		// Check for existing user
-// 		const existingUser = await User.findOne({ email });
-// 		if (existingUser) {
-// 			return res.status(400).json({ message: "Email already registered" });
-// 		}
+//              // Check for existing user
+//              const existingUser = await User.findOne({ email });
+//              if (existingUser) {
+//                      return res.status(400).json({ message: "Email already registered" });
+//              }
 
-// 		// ✅ MANDATORY Referral check
-// 		if (!refercode) {
-// 			return res.status(400).json({ message: "Referral code is required" });
-// 		}
+//              // ✅ MANDATORY Referral check
+//              if (!refercode) {
+//                      return res.status(400).json({ message: "Referral code is required" });
+//              }
 
-// 		// Validate referral code
-// 		const refUser = await User.findOne({ randomCode: refercode });
-// 		if (!refUser) {
-// 			return res.status(400).json({ message: "Invalid referral code" });
-// 		}
+//              // Validate referral code
+//              const refUser = await User.findOne({ randomCode: refercode });
+//              if (!refUser) {
+//                      return res.status(400).json({ message: "Invalid referral code" });
+//              }
 
-// 		// Hash password before saving
-// 		const hashedPassword = await bcrypt.hash(password, 10);
+//              // Hash password before saving
+//              const hashedPassword = await bcrypt.hash(password, 10);
 
-// 		const newUser = new User({
-// 			fullName,
-// 			email,
-// 			password: hashedPassword,
-// 			whatsappNumber,
-// 			referredBy: refercode,
-// 		});
-// 		await newUser.save();
+//              const newUser = new User({
+//                      fullName,
+//                      email,
+//                      password: hashedPassword,
+//                      whatsappNumber,
+//                      referredBy: refercode,
+//              });
+//              await newUser.save();
 
-// 		// Add referral link
-// 		if (refercode) {
-// 			const refUser = await User.findOne({ randomCode: refercode });
-// 			if (refUser) {
-// 				refUser.team.push(newUser.randomCode);
-// 				await refUser.save();
-// 			}
-// 		}
+//              // Add referral link
+//              if (refercode) {
+//                      const refUser = await User.findOne({ randomCode: refercode });
+//                      if (refUser) {
+//                              refUser.team.push(newUser.randomCode);
+//                              await refUser.save();
+//                      }
+//              }
 
-// 		res.status(201).json({
-// 			message: "User registered successfully",
-// 			user: newUser,
-// 			userPlanlength: 0,
-// 		});
-// 	} catch (err) {
-// 		res.status(500).json({ message: err.message });
-// 	}
+//              res.status(201).json({
+//                      message: "User registered successfully",
+//                      user: newUser,
+//                      userPlanlength: 0,
+//              });
+//      } catch (err) {
+//              res.status(500).json({ message: err.message });
+//      }
 // };
 
 
@@ -283,55 +283,55 @@ function generateRandomCode() {
 // // ================== 🔑 LOGIN ==================
 
 // exports.login = async (req, res) => {
-// 	try {
-// 		const { email, password } = req.body;
+//      try {
+//              const { email, password } = req.body;
 
-// 		// ✅ Admin login (plaintext check)
-// 		if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
-// 			const token = jwt.sign(
-// 				{ role: "admin", email },
-// 				process.env.JWT_SECRET,
-// 				{ expiresIn: "1d" }
-// 			);
+//              // ✅ Admin login (plaintext check)
+//              if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
+//                      const token = jwt.sign(
+//                              { role: "admin", email },
+//                              process.env.JWT_SECRET,
+//                              { expiresIn: "1d" }
+//                      );
 
-// 			return res.status(200).json({
-// 				success: true,
-// 				message: "Admin login successful",
-// 				user: { email, role: "admin" },
-// 				token,
-// 				userPlanlength: 0,
-// 			});
-// 		}
+//                      return res.status(200).json({
+//                              success: true,
+//                              message: "Admin login successful",
+//                              user: { email, role: "admin" },
+//                              token,
+//                              userPlanlength: 0,
+//                      });
+//              }
 
-// 		// ✅ Regular user login (bcrypt check)
-// 		const user = await User.findOne({ email });
-// 		if (!user) {
-// 			return res.status(404).json({ success: false, message: "User not found" });
-// 		}
+//              // ✅ Regular user login (bcrypt check)
+//              const user = await User.findOne({ email });
+//              if (!user) {
+//                      return res.status(404).json({ success: false, message: "User not found" });
+//              }
 
-// 		const isMatch = await bcrypt.compare(password, user.password);
-// 		if (!isMatch) {
-// 			return res.status(400).json({ success: false, message: "Invalid credentials" });
-// 		}
+//              const isMatch = await bcrypt.compare(password, user.password);
+//              if (!isMatch) {
+//                      return res.status(400).json({ success: false, message: "Invalid credentials" });
+//              }
 
-// 		const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-// 			expiresIn: "1d",
-// 		});
+//              const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+//                      expiresIn: "1d",
+//              });
 
-// 		const plans = await Plan.find({ user_id: user._id });
-// 		const planCount = plans.length || 0;
+//              const plans = await Plan.find({ user_id: user._id });
+//              const planCount = plans.length || 0;
 
-// 		res.status(200).json({
-// 			success: true,
-// 			message: "User login successful",
-// 			token,
-// 			user,
-// 			userPlanlength: planCount,
-// 		});
-// 	} catch (err) {
-// 		console.error("Login Error:", err);
-// 		res.status(500).json({ success: false, message: "Server error" });
-// 	}
+//              res.status(200).json({
+//                      success: true,
+//                      message: "User login successful",
+//                      token,
+//                      user,
+//                      userPlanlength: planCount,
+//              });
+//      } catch (err) {
+//              console.error("Login Error:", err);
+//              res.status(500).json({ success: false, message: "Server error" });
+//      }
 // };
 
 
@@ -339,13 +339,55 @@ function generateRandomCode() {
 exports.login = async (req, res) => {
 	try {
 		const { email, password } = req.body;
+		const normalizedEmail = (email || "").trim().toLowerCase();
+		const normalizedAdminEmail = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
 
 		// ✅ ADMIN LOGIN (using bcrypt)
-		if (email === process.env.ADMIN_EMAIL) {
-			const match = await bcrypt.compare(password, process.env.ADMIN_PASSWORD_HASH);
+		if (normalizedEmail && normalizedEmail === normalizedAdminEmail) {
+			let match = false;
+
+			// Prefer plaintext env password if configured (common in local/dev).
+			// If ADMIN_PASSWORD_HASH is left from an old password, relying on it would break login.
+			if (process.env.ADMIN_PASSWORD) {
+				match = password === process.env.ADMIN_PASSWORD;
+			} else if (process.env.ADMIN_PASSWORD_HASH) {
+				match = await bcrypt.compare(password, process.env.ADMIN_PASSWORD_HASH);
+			} else {
+				return res.status(500).json({
+					success: false,
+					message: "Admin credentials are not configured on server"
+				});
+			}
+
 			if (match) {
+				// Ensure we have an admin user in DB (seed runs on startup, but keep a safe fallback here)
+				let adminUser = await User.findOne({ email: normalizedAdminEmail });
+				if (!adminUser) {
+					const hashedPassword = process.env.ADMIN_PASSWORD
+						? await bcrypt.hash(process.env.ADMIN_PASSWORD, 10)
+						: process.env.ADMIN_PASSWORD_HASH;
+
+					let randomCode = generateRandomCode();
+					for (let attempt = 0; attempt < 20; attempt++) {
+						// eslint-disable-next-line no-await-in-loop
+						const exists = await User.exists({ randomCode });
+						if (!exists) break;
+						randomCode = generateRandomCode();
+					}
+
+					adminUser = new User({
+						fullName: "Admin",
+						email: normalizedAdminEmail,
+						password: hashedPassword,
+						role: "admin",
+						randomCode,
+						team: [],
+					});
+					await adminUser.save();
+				}
+
 				const token = jwt.sign(
-					{ role: "admin", email },
+					{ id: adminUser._id, role: "admin", email: adminUser.email },
 					process.env.JWT_SECRET,
 					{ expiresIn: "1d" }
 				);
@@ -353,7 +395,7 @@ exports.login = async (req, res) => {
 				return res.status(200).json({
 					success: true,
 					message: "Admin login successful",
-					user: { email, role: "admin" },
+					user: { _id: adminUser._id, email: adminUser.email, role: "admin" },
 					token,
 					userPlanlength: 0,
 				});
