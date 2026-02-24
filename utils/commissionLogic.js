@@ -14,8 +14,9 @@ const REFERRAL_COMMISSION_RATES = {
     5: 0.005  // 0.5% - Level 5
 };
 
-// Plan expire commission rates (when plan completes)
-const PLAN_EXPIRE_COMMISSION_RATES = {
+// Daily plan commission rates (paid when a downline receives daily plan profit)
+// Uses the same percentages that were previously used for "plan expire commission".
+const DAILY_PLAN_COMMISSION_RATES = {
     1: 0.04,  // 4%
     2: 0.025, // 2.5%
     3: 0.015, // 1.5%
@@ -86,18 +87,23 @@ const distributeReferralCommission = async (user, investmentAmount) => {
     }
 };
 
-// ✅ DISTRIBUTE PLAN EXPIRE COMMISSION WHEN PLAN IS CLAIMED/COMPLETED
-const distributePlanExpireCommission = async (planId) => {
+// ✅ DISTRIBUTE DAILY PLAN COMMISSION WHEN USER RECEIVES DAILY PROFIT
+// `profitAmount` is the amount of profit credited to the user for a specific plan day.
+const distributeDailyPlanCommission = async ({
+	user,
+	plan,
+	profitAmount,
+	dayNumber,
+}) => {
     try {
-        const plan = await Plan.findById(planId).populate('user_id');
-        if (!plan) throw new Error('Plan not found');
+        if (!user || !user._id) throw new Error('User is required for daily commission');
+        if (!plan || !plan._id) throw new Error('Plan is required for daily commission');
 
-        const user = plan.user_id;
-        const returnProfitAmount = plan.returnProfit;
+        const safeProfitAmount = Number(profitAmount) || 0;
+        if (safeProfitAmount <= 0) return [];
 
-        console.log(`🎯 Distributing plan expire commissions for plan ${plan._id}:`);
-        console.log(`- Investment: ${plan.Investment}`);
-        console.log(`- Return Profit: ${returnProfitAmount}`);
+        console.log(`🎯 Distributing DAILY plan commissions for plan ${plan._id} day ${dayNumber || 'N/A'}:`);
+        console.log(`- Daily Profit Amount: ${safeProfitAmount}`);
 
         const commissionTransactions = [];
         let currentUser = user;
@@ -108,26 +114,24 @@ const distributePlanExpireCommission = async (planId) => {
             const upliner = await User.findOne({ randomCode: currentUser.referredBy });
             if (!upliner) break;
 
-            const commissionRate = PLAN_EXPIRE_COMMISSION_RATES[level] || 0;
-            const commissionAmount = returnProfitAmount * commissionRate;
+            const commissionRate = DAILY_PLAN_COMMISSION_RATES[level] || 0;
+            const commissionAmount = safeProfitAmount * commissionRate;
 
             if (commissionAmount > 0) {
                 // Add commission to upliner's balance
                 upliner.userbalance += commissionAmount;
                 upliner.totalCommissionEarned = (upliner.totalCommissionEarned || 0) + commissionAmount;
+                // Reuse existing field to avoid DB schema changes; represents daily plan commissions now.
                 upliner.planExpireCommission = (upliner.planExpireCommission || 0) + commissionAmount;
 
                 await upliner.save();
-
-                // Record commission in plan
-                await plan.addUplineCommission(level, upliner._id, commissionAmount, commissionRate);
 
                 // Create transaction record
                 const commissionTransaction = new Transaction({
                     userId: upliner._id,
                     amount: commissionAmount,
-                    type: 'plan_expire_commission',
-                    description: `Level ${level} plan expire commission from ${user.fullName}`,
+                    type: 'daily_plan_commission',
+                    description: `Level ${level} daily plan commission from ${user.fullName}`,
                     status: 'completed',
                     metadata: {
                         fromUserId: user._id,
@@ -135,7 +139,8 @@ const distributePlanExpireCommission = async (planId) => {
                         level: level,
                         planId: plan._id,
                         planName: plan.PlanName,
-                        returnProfitAmount: returnProfitAmount,
+                        dayNumber: dayNumber,
+                        profitAmount: safeProfitAmount,
                         commissionRate: commissionRate
                     }
                 });
@@ -143,27 +148,23 @@ const distributePlanExpireCommission = async (planId) => {
                 await commissionTransaction.save();
                 commissionTransactions.push(commissionTransaction);
 
-                console.log(`🎁 Level ${level} plan expire commission: ${commissionAmount} PKR to ${upliner.fullName}`);
+                console.log(`🎁 Level ${level} daily plan commission: ${commissionAmount} PKR to ${upliner.fullName}`);
             }
 
             currentUser = upliner;
         }
 
-        // Mark plan as having distributed commissions
-        plan.commissionAmount = commissionTransactions.reduce((sum, t) => sum + t.amount, 0);
-        await plan.markCommissionsDistributed();
-
         return commissionTransactions;
     } catch (error) {
-        console.error('Error distributing plan expire commission:', error);
+        console.error('Error distributing daily plan commission:', error);
         throw error;
     }
 };
 
 module.exports = {
     distributeReferralCommission,
-    distributePlanExpireCommission,
+    distributeDailyPlanCommission,
     REFERRAL_COMMISSION_RATES,
-    PLAN_EXPIRE_COMMISSION_RATES,
+    DAILY_PLAN_COMMISSION_RATES,
     MAX_COMMISSION_LEVEL
 };

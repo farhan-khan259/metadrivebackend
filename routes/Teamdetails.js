@@ -8,6 +8,64 @@ const Paymnet = require("../models/payment");
 const Plan = require("../models/plain");
 const { REFERRAL_COMMISSION_RATES, MAX_COMMISSION_LEVEL } = require("../utils/commissionLogic");
 
+const TEAM_DEPOSIT_REWARD_THRESHOLD = 100000;
+const TEAM_DEPOSIT_REWARD_AMOUNT = 3000;
+
+async function buildLevelMembers(user) {
+	const userSelectFields =
+		"_id fullName email randomCode whatsappNumber team createdAt userTotalDeposits userTotalWithdrawals UserInvestment referredBy";
+
+	const dedupeById = (members) => {
+		const seen = new Set();
+		const unique = [];
+		for (const member of members) {
+			const id = member?._id?.toString();
+			if (!id || seen.has(id)) continue;
+			seen.add(id);
+			unique.push(member);
+		}
+		return unique;
+	};
+
+	const fetchUsersByCodes = async (codes) => {
+		if (!codes || codes.length === 0) return [];
+		return User.find({ randomCode: { $in: codes } }).select(userSelectFields);
+	};
+
+	const levelMembers = {};
+	const seenUserIds = new Set();
+
+	levelMembers[1] = dedupeById(await fetchUsersByCodes(user.team || []));
+	levelMembers[1].forEach((m) => seenUserIds.add(m._id.toString()));
+
+	for (let lvl = 2; lvl <= MAX_COMMISSION_LEVEL; lvl++) {
+		const prev = levelMembers[lvl - 1] || [];
+		const nextCodes = prev.flatMap((m) => (m.team && m.team.length ? m.team : []));
+		if (!nextCodes.length) {
+			levelMembers[lvl] = [];
+			continue;
+		}
+
+		let fetched = await fetchUsersByCodes(nextCodes);
+		fetched = dedupeById(fetched).filter((m) => !seenUserIds.has(m._id.toString()));
+		fetched.forEach((m) => seenUserIds.add(m._id.toString()));
+		levelMembers[lvl] = fetched;
+	}
+
+	return levelMembers;
+}
+
+function calculateTotalTeamDeposit(levelMembers) {
+	let total = 0;
+	for (let lvl = 1; lvl <= MAX_COMMISSION_LEVEL; lvl++) {
+		const members = levelMembers[lvl] || [];
+		for (const member of members) {
+			total += Number(member.userTotalDeposits || 0);
+		}
+	}
+	return total;
+}
+
 /**
  * Helper: calculate deposit statistics for a set of members
  */
@@ -276,6 +334,8 @@ router.post("/", async (req, res) => {
 				userTotalDeposits: user.userTotalDeposits || 0,
 				userCreateDate: user.createdAt || null,
 				userTotalWithdrawals: user.userTotalWithdrawals || 0,
+				teamDepositRewardClaimed: user.teamDepositRewardClaimed || false,
+				teamDepositRewardClaimedAt: user.teamDepositRewardClaimedAt || null,
 			},
 			directReferrals: {
 				members: directStats.membersWithPayments,
@@ -372,6 +432,75 @@ router.post("/", async (req, res) => {
 		});
 	} catch (err) {
 		console.error("❌ Error in /team route:", err);
+		return res.status(500).json({ success: false, message: err.message || "Server error" });
+	}
+});
+
+/**
+ * POST /team/claim-reward
+ * One-time reward: +3000 to userbalance when total team deposit (levels 1-5) reaches 100k
+ */
+router.post("/claim-reward", async (req, res) => {
+	const { userId } = req.body;
+
+	try {
+		if (!userId) {
+			return res.status(400).json({ success: false, message: "userId is required" });
+		}
+
+		const user = await User.findById(userId).select("_id team userbalance teamDepositRewardClaimed");
+		if (!user) {
+			return res.status(404).json({ success: false, message: "User not found" });
+		}
+
+		if (user.teamDepositRewardClaimed) {
+			return res
+				.status(400)
+				.json({ success: false, message: "Reward already claimed", claimed: true });
+		}
+
+		const levelMembers = await buildLevelMembers(user);
+		const totalTeamDeposit = calculateTotalTeamDeposit(levelMembers);
+		if (totalTeamDeposit < TEAM_DEPOSIT_REWARD_THRESHOLD) {
+			return res.status(400).json({
+				success: false,
+				message: "Not eligible yet",
+				totalTeamDeposit,
+				threshold: TEAM_DEPOSIT_REWARD_THRESHOLD,
+				claimed: false,
+			});
+		}
+
+		const updated = await User.findOneAndUpdate(
+			{ _id: userId, teamDepositRewardClaimed: { $ne: true } },
+			{
+				$inc: { userbalance: TEAM_DEPOSIT_REWARD_AMOUNT },
+				$set: {
+					teamDepositRewardClaimed: true,
+					teamDepositRewardClaimedAt: new Date(),
+				},
+			},
+			{ new: true }
+		).select("_id userbalance teamDepositRewardClaimed teamDepositRewardClaimedAt");
+
+		if (!updated) {
+			return res
+				.status(400)
+				.json({ success: false, message: "Reward already claimed", claimed: true });
+		}
+
+		return res.status(200).json({
+			success: true,
+			message: "Reward claimed successfully",
+			rewardAmount: TEAM_DEPOSIT_REWARD_AMOUNT,
+			newBalance: updated.userbalance,
+			claimed: true,
+			totalTeamDeposit,
+			threshold: TEAM_DEPOSIT_REWARD_THRESHOLD,
+			claimedAt: updated.teamDepositRewardClaimedAt,
+		});
+	} catch (err) {
+		console.error("❌ Error in /team/claim-reward:", err);
 		return res.status(500).json({ success: false, message: err.message || "Server error" });
 	}
 });

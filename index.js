@@ -1,23 +1,27 @@
 
-
-require("dotenv").config(); // Load environment variables first
+require("dotenv").config(); // ✅ Load environment variables first
 
 const express = require("express");
 const mongoose = require("mongoose");
+const cors = require("cors");
 const path = require("path");
-const cron = require("node-cron");
 
-// Import routes
+// ✅ Import routes
 const authRoutes = require("./routes/user");
 const paymentRoutes = require("./routes/payment");
+
 const bindRoutes = require("./routes/bindAccountRoutes");
 const teamDetailsRoutes = require("./routes/Teamdetails");
 const planRoutes = require("./routes/plain");
-const commissionRoutes = require("./routes/commissionRoutes");
+const commissionRoutes = require('./routes/commissionRoutes');
+const planExpireCommissionRoutes = require('./routes/planExpireCommission');
 const adminRoutes = require("./routes/adminRoutes");
 const announcementRoutes = require("./routes/announcementRoutes");
 const userHistory = require("./routes/userHistory");
+
 const ensureAdminUser = require("./utils/ensureAdminUser");
+
+
 
 const app = express();
 
@@ -58,19 +62,23 @@ mongoose
 	.then(() => console.log("✅ MongoDB Connected"))
 	.catch((err) => console.error("❌ MongoDB Connection Error:", err));
 
-// ✅ Static folder for uploads
+
+// ✅ Static Folder for uploads
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ✅ API Routes
 app.use("/api", authRoutes);
 app.use("/api", userHistory);
+app.use('/api/commissions', planExpireCommissionRoutes); // This is important!
 app.use("/team", teamDetailsRoutes);
 app.use("/api/plans", planRoutes);
 app.use("/api", paymentRoutes);
 app.use("/api/bindAccountRoutes", bindRoutes);
-app.use("/api/commission", commissionRoutes);
+app.use('/api/commission', commissionRoutes); // Only this one
 app.use("/api", adminRoutes);
 app.use("/api", announcementRoutes);
+
+
 
 // ✅ Test route to verify frontend connection
 app.get("/api/test", (req, res) => {
@@ -91,7 +99,7 @@ cron.schedule("0 0 * * *", () => {
 console.log("✅ Cron jobs scheduled");
 
 // ✅ Root route
-app.get("/", (req, res) => res.send("Hello from SolarX0 Backend!"));
+app.get("/", (req, res) => res.send("Hello from metadrive Backend!"));
 
 // ✅ Start Server
 const PORT = process.env.PORT || 3005;

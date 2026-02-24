@@ -34,6 +34,10 @@ const UserSchema = new mongoose.Schema(
 
 		// Wallet for additional funds if needed
 		wallet: { type: Number, default: 0 },
+
+		// One-time reward: 3k when team deposit (lvl 1-5) reaches 100k
+		teamDepositRewardClaimed: { type: Boolean, default: false },
+		teamDepositRewardClaimedAt: { type: Date, default: null },
 	},
 	{ timestamps: true }
 );

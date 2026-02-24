@@ -3,11 +3,11 @@ const router = express.Router();
 const Transaction = require('../models/Transaction');
 const mongoose = require('mongoose');
 
-// Get REAL plan expire commission summary for user
+// Get REAL daily plan commission summary for user (endpoint kept for backwards compatibility)
 router.get('/plan-expire-summary/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
-        console.log('🔍 Fetching REAL plan expire commissions for user:', userId);
+        console.log('🔍 Fetching REAL daily plan commissions for user:', userId);
 
         // Validate userId
         if (!mongoose.Types.ObjectId.isValid(userId)) {
@@ -17,14 +17,14 @@ router.get('/plan-expire-summary/:userId', async (req, res) => {
             });
         }
 
-        // Get REAL plan expire commissions for the user
+        // Get REAL DAILY plan commissions for the user
         const transactions = await Transaction.find({
             userId: new mongoose.Types.ObjectId(userId),
-            type: 'plan_expire_commission',
+            type: 'daily_plan_commission',
             status: 'completed'
         }).sort({ createdAt: -1 });
 
-        console.log(`📊 Found ${transactions.length} REAL plan expire commissions`);
+        console.log(`📊 Found ${transactions.length} REAL daily plan commissions`);
 
         // Calculate level-wise totals
         const levelTotals = {
@@ -67,7 +67,7 @@ router.get('/plan-expire-summary/:userId', async (req, res) => {
         if (transactions.length === 0) {
             return res.json({
                 success: true,
-                message: 'No plan expire commissions found',
+                message: 'No daily plan commissions found',
                 data: {
                     summary: {
                         totalCommission: 0,
@@ -81,7 +81,7 @@ router.get('/plan-expire-summary/:userId', async (req, res) => {
 
         res.json({
             success: true,
-            message: 'Plan expire commission data retrieved successfully',
+            message: 'Daily plan commission data retrieved successfully',
             data: {
                 summary: {
                     totalCommission: transactions.reduce((sum, t) => sum + t.amount, 0),
@@ -94,6 +94,111 @@ router.get('/plan-expire-summary/:userId', async (req, res) => {
 
     } catch (error) {
         console.error('❌ Error fetching plan expire commission summary:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
+
+// ✅ Get ALL commissions for user (referral + daily plan commissions)
+router.get('/all-commissions/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        console.log('🔍 Fetching ALL commissions for user:', userId);
+
+        if (!mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid user ID'
+            });
+        }
+
+        // Get all commission transactions (referral + daily plan)
+        const transactions = await Transaction.find({
+            userId: new mongoose.Types.ObjectId(userId),
+            type: { $in: ['referral_commission', 'daily_plan_commission'] },
+            status: 'completed'
+        }).sort({ createdAt: -1 });
+
+        console.log(`📊 Found ${transactions.length} total commission transactions`);
+
+        // Calculate level-wise totals and type-wise totals
+        const levelTotals = {
+            level1: 0,
+            level2: 0,
+            level3: 0,
+            level4: 0,
+            level5: 0,
+        };
+
+        const typeTotals = {
+            referral_commission: 0,
+            daily_plan_commission: 0,
+        };
+
+        // Process transactions
+        const enhancedTransactions = transactions.map(transaction => ({
+            _id: transaction._id,
+            amount: transaction.amount,
+            type: transaction.type,
+            description: transaction.description,
+            status: transaction.status,
+            createdAt: transaction.createdAt,
+            metadata: transaction.metadata || {
+                level: 1,
+                fromUserName: 'Team Member',
+            }
+        }));
+
+        // Calculate totals
+        enhancedTransactions.forEach(transaction => {
+            const level = transaction.metadata?.level;
+            if (level === 1) levelTotals.level1 += transaction.amount;
+            else if (level === 2) levelTotals.level2 += transaction.amount;
+            else if (level === 3) levelTotals.level3 += transaction.amount;
+            else if (level === 4) levelTotals.level4 += transaction.amount;
+            else if (level === 5) levelTotals.level5 += transaction.amount;
+
+            if (transaction.type === 'referral_commission') {
+                typeTotals.referral_commission += transaction.amount;
+            } else if (transaction.type === 'daily_plan_commission') {
+                typeTotals.daily_plan_commission += transaction.amount;
+            }
+        });
+
+        if (transactions.length === 0) {
+            return res.json({
+                success: true,
+                message: 'No commissions found',
+                data: {
+                    summary: {
+                        totalCommission: 0,
+                        levelTotals: { level1: 0, level2: 0, level3: 0, level4: 0, level5: 0 },
+                        typeTotals: { referral_commission: 0, daily_plan_commission: 0 },
+                        totalTransactions: 0
+                    },
+                    transactions: []
+                }
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'All commissions retrieved successfully',
+            data: {
+                summary: {
+                    totalCommission: transactions.reduce((sum, t) => sum + t.amount, 0),
+                    levelTotals,
+                    typeTotals,
+                    totalTransactions: transactions.length
+                },
+                transactions: enhancedTransactions
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching all commissions:', error);
         res.status(500).json({
             success: false,
             message: error.message

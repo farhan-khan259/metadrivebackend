@@ -1,37 +1,25 @@
 const express = require('express');
 const router = express.Router();
-const Plan = require('../models/plain');
-const { distributePlanExpireCommission } = require('../utils/commissionLogic');
+const Transaction = require('../models/Transaction');
+const mongoose = require('mongoose');
 
-// Manual trigger for commission distribution (for testing)
-router.post('/distribute/:planId', async (req, res) => {
-    try {
-        const { planId } = req.params;
-        const commissions = await distributePlanExpireCommission(planId);
-
-        res.json({
-            success: true,
-            message: 'Plan expire commissions distributed successfully',
-            commissions: commissions
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-});
-
-// Get plan expire commission summary for user
+// Get DAILY plan commission summary for user (legacy path kept)
 router.get('/plan-expire-summary/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid user ID'
+            });
+        }
 
         const planExpireCommissions = await Transaction.aggregate([
             {
                 $match: {
                     userId: mongoose.Types.ObjectId(userId),
-                    type: 'plan_expire_commission',
+                    type: 'daily_plan_commission',
                     status: 'completed'
                 }
             },
@@ -47,24 +35,6 @@ router.get('/plan-expire-summary/:userId', async (req, res) => {
         res.json({
             success: true,
             commissions: planExpireCommissions
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-});
-
-// Get all plans eligible for commission distribution
-router.get('/eligible-plans', async (req, res) => {
-    try {
-        const eligiblePlans = await Plan.findPlansForCommissionDistribution();
-
-        res.json({
-            success: true,
-            count: eligiblePlans.length,
-            plans: eligiblePlans
         });
     } catch (error) {
         res.status(500).json({
