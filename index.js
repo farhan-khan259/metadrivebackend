@@ -29,10 +29,8 @@ const app = express();
 // ✅ CORS Setup
 const allowedOrigins = [
 	"http://localhost:3000",
-	"https://solarfullfrontend.vercel.app",
 	"https://www.metadrive01.xyz",
 	"https://metadrive01.xyz",
-	"https://metadrivefrontend.onrender.com",
 ];
 
 app.use((req, res, next) => {
