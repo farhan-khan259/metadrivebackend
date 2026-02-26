@@ -18,9 +18,9 @@ const calculateProfitSchedule = ({ investment, percentageStr, days }) => {
 	const safeInvestment = Number(investment) || 0;
 	const safeDays = Math.max(1, Number(days) || 1);
 
-	const totalProfit = Math.round(safeInvestment * (percentage / 100));
-	const baseDaily = Math.floor(totalProfit / safeDays);
-	const lastDay = totalProfit - baseDaily * (safeDays - 1);
+	const baseDaily = Math.round(safeInvestment * (percentage / 100));
+	const totalProfit = baseDaily * safeDays;
+	const lastDay = baseDaily;
 
 	return {
 		percentage,
@@ -39,15 +39,7 @@ const startOfDay = (date) => {
 // ✅ Create a new plan - UPDATED with referral commission
 exports.createPlan = async (req, res) => {
 	try {
-		const {
-			user_id,
-			PlanName,
-			Investment,
-			durationDays,
-			days,
-			profitPercentage,
-			returnProfit
-		} = req.body;
+		const { user_id, PlanName, Investment, profitPercentage, returnProfit } = req.body;
 
 		if (!user_id || !PlanName || !Investment) {
 			return res
@@ -65,20 +57,20 @@ exports.createPlan = async (req, res) => {
 			});
 		}
 
-		// Use days from frontend or default to durationDays or 30
-		const planDays = days || durationDays || 30;
+		// Plans are fixed to 180 days
+		const planDays = 180;
 
 		// Calculate dates
 		const startingDate = new Date();
-		const endingDate = startOfDay(startingDate);
+		const endingDate = new Date(startingDate);
 		endingDate.setDate(endingDate.getDate() + planDays);
 
-		const percentageStr = profitPercentage || "5.6%";
+		const percentageStr = profitPercentage || "5.5%";
 		let calculatedReturnProfit = 0;
 		let calculatedDailyEarning = 0;
 		let calculatedLastDayEarning = 0;
 
-		// Preferred: compute from percentage as TOTAL profit over full duration
+		// Preferred: compute from percentage as DAILY profit % over full duration
 		if (percentageStr) {
 			const schedule = calculateProfitSchedule({
 				investment: Investment,
@@ -96,7 +88,7 @@ exports.createPlan = async (req, res) => {
 		} else {
 			return res.status(400).json({
 				success: false,
-				message: "profitPercentage (preferred) or returnProfit is required",
+				message: "profitPercentage (daily %) or returnProfit is required",
 			});
 		}
 
@@ -113,7 +105,7 @@ exports.createPlan = async (req, res) => {
 			profitPercentage: percentageStr,
 			totalEarning: 0,
 			totalAmount: Investment + calculatedReturnProfit,
-			planExpireText: `${planDays} days`,
+			planExpireText: `180 days`,
 			expiryDate: endingDate,
 			planExpired: false,
 			status: 'running'
@@ -202,7 +194,7 @@ exports.getPlanById = async (req, res) => {
 	}
 };
 
-// ✅ Claim plan endpoint - ENHANCED with plan expire commission
+// ✅ Claim plan endpoint - ENHANCED with rebate commission
 exports.claimPlan = async (req, res) => {
 	try {
 		const { planId, user_id } = req.body;

@@ -3,11 +3,12 @@ const router = express.Router();
 const Transaction = require('../models/Transaction');
 const mongoose = require('mongoose');
 
-// Get REAL daily plan commission summary for user (endpoint kept for backwards compatibility)
-router.get('/plan-expire-summary/:userId', async (req, res) => {
+const REBATE_TYPES = ['rebate_commission', 'daily_plan_commission', 'plan_expire_commission'];
+
+const getRebateSummary = async (req, res) => {
     try {
         const { userId } = req.params;
-        console.log('🔍 Fetching REAL daily plan commissions for user:', userId);
+        console.log('🔍 Fetching rebate commissions for user:', userId);
 
         // Validate userId
         if (!mongoose.Types.ObjectId.isValid(userId)) {
@@ -17,14 +18,14 @@ router.get('/plan-expire-summary/:userId', async (req, res) => {
             });
         }
 
-        // Get REAL DAILY plan commissions for the user
+        // Get rebate commissions for the user (including legacy transaction types)
         const transactions = await Transaction.find({
             userId: new mongoose.Types.ObjectId(userId),
-            type: 'daily_plan_commission',
+            type: { $in: REBATE_TYPES },
             status: 'completed'
         }).sort({ createdAt: -1 });
 
-        console.log(`📊 Found ${transactions.length} REAL daily plan commissions`);
+        console.log(`📊 Found ${transactions.length} rebate commissions`);
 
         // Calculate level-wise totals
         const levelTotals = {
@@ -67,7 +68,7 @@ router.get('/plan-expire-summary/:userId', async (req, res) => {
         if (transactions.length === 0) {
             return res.json({
                 success: true,
-                message: 'No daily plan commissions found',
+                message: 'No rebate commissions found',
                 data: {
                     summary: {
                         totalCommission: 0,
@@ -81,7 +82,7 @@ router.get('/plan-expire-summary/:userId', async (req, res) => {
 
         res.json({
             success: true,
-            message: 'Daily plan commission data retrieved successfully',
+            message: 'Rebate commission data retrieved successfully',
             data: {
                 summary: {
                     totalCommission: transactions.reduce((sum, t) => sum + t.amount, 0),
@@ -93,15 +94,18 @@ router.get('/plan-expire-summary/:userId', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error fetching plan expire commission summary:', error);
+        console.error('❌ Error fetching rebate commission summary:', error);
         res.status(500).json({
             success: false,
             message: error.message
         });
     }
-});
+};
 
-// ✅ Get ALL commissions for user (referral + daily plan commissions)
+router.get('/rebate-summary/:userId', getRebateSummary);
+router.get('/plan-expire-summary/:userId', getRebateSummary);
+
+// ✅ Get ALL commissions for user (referral + rebate commissions)
 router.get('/all-commissions/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
@@ -114,10 +118,10 @@ router.get('/all-commissions/:userId', async (req, res) => {
             });
         }
 
-        // Get all commission transactions (referral + daily plan)
+        // Get all commission transactions (referral + rebate)
         const transactions = await Transaction.find({
             userId: new mongoose.Types.ObjectId(userId),
-            type: { $in: ['referral_commission', 'daily_plan_commission'] },
+            type: { $in: ['referral_commission', ...REBATE_TYPES] },
             status: 'completed'
         }).sort({ createdAt: -1 });
 
@@ -134,7 +138,7 @@ router.get('/all-commissions/:userId', async (req, res) => {
 
         const typeTotals = {
             referral_commission: 0,
-            daily_plan_commission: 0,
+            rebate_commission: 0,
         };
 
         // Process transactions
@@ -162,8 +166,8 @@ router.get('/all-commissions/:userId', async (req, res) => {
 
             if (transaction.type === 'referral_commission') {
                 typeTotals.referral_commission += transaction.amount;
-            } else if (transaction.type === 'daily_plan_commission') {
-                typeTotals.daily_plan_commission += transaction.amount;
+            } else if (REBATE_TYPES.includes(transaction.type)) {
+                typeTotals.rebate_commission += transaction.amount;
             }
         });
 
@@ -175,7 +179,7 @@ router.get('/all-commissions/:userId', async (req, res) => {
                     summary: {
                         totalCommission: 0,
                         levelTotals: { level1: 0, level2: 0, level3: 0, level4: 0, level5: 0 },
-                        typeTotals: { referral_commission: 0, daily_plan_commission: 0 },
+                        typeTotals: { referral_commission: 0, rebate_commission: 0 },
                         totalTransactions: 0
                     },
                     transactions: []

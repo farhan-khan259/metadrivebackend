@@ -15,7 +15,7 @@ const bindRoutes = require("./routes/bindAccountRoutes");
 const teamDetailsRoutes = require("./routes/Teamdetails");
 const planRoutes = require("./routes/plain");
 const commissionRoutes = require('./routes/commissionRoutes');
-const planExpireCommissionRoutes = require('./routes/planExpireCommission');
+const rebateCommissionRoutes = require('./routes/planExpireCommission');
 const adminRoutes = require("./routes/adminRoutes");
 const announcementRoutes = require("./routes/announcementRoutes");
 const userHistory = require("./routes/userHistory");
@@ -31,6 +31,7 @@ const allowedOrigins = [
 	"http://localhost:3000",
 	"https://www.metadrive01.xyz",
 	"https://metadrive01.xyz",
+	
 ];
 
 app.use((req, res, next) => {
@@ -68,7 +69,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // ✅ API Routes
 app.use("/api", authRoutes);
 app.use("/api", userHistory);
-app.use('/api/commissions', planExpireCommissionRoutes); // This is important!
+app.use('/api/commissions', rebateCommissionRoutes);
 app.use("/team", teamDetailsRoutes);
 app.use("/api/plans", planRoutes);
 app.use("/api", paymentRoutes);

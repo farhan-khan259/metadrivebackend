@@ -10,6 +10,7 @@ const { REFERRAL_COMMISSION_RATES, MAX_COMMISSION_LEVEL } = require("../utils/co
 
 const TEAM_DEPOSIT_REWARD_THRESHOLD = 100000;
 const TEAM_DEPOSIT_REWARD_AMOUNT = 3000;
+const TEAM_REWARD_MILESTONES = [100000, 200000, 300000];
 
 async function buildLevelMembers(user) {
 	const userSelectFields =
@@ -320,6 +321,16 @@ router.post("/", async (req, res) => {
 			level5TotalCommission;
 
 		// Final response
+		const claimedMilestones = Array.isArray(user.teamDepositRewardMilestones)
+			? user.teamDepositRewardMilestones
+			: [];
+		const normalizedClaimedMilestones = [
+			...new Set([
+				...claimedMilestones,
+				...(user.teamDepositRewardClaimed ? [TEAM_DEPOSIT_REWARD_THRESHOLD] : []),
+			]),
+		].sort((a, b) => a - b);
+
 		return res.status(200).json({
 			success: true,
 			user: {
@@ -336,6 +347,7 @@ router.post("/", async (req, res) => {
 				userTotalWithdrawals: user.userTotalWithdrawals || 0,
 				teamDepositRewardClaimed: user.teamDepositRewardClaimed || false,
 				teamDepositRewardClaimedAt: user.teamDepositRewardClaimedAt || null,
+				teamDepositRewardMilestones: normalizedClaimedMilestones,
 			},
 			directReferrals: {
 				members: directStats.membersWithPayments,
@@ -422,6 +434,7 @@ router.post("/", async (req, res) => {
 			},
 			payment: payment || [],
 			teamPlanInvestment,
+			teamDepositRewardMilestones: TEAM_REWARD_MILESTONES,
 			teamPlanInvestmentBreakdown: {
 				level1: level1Investment,
 				level2: level2Investment,
@@ -438,55 +451,84 @@ router.post("/", async (req, res) => {
 
 /**
  * POST /team/claim-reward
- * One-time reward: +3000 to userbalance when total team deposit (levels 1-5) reaches 100k
+ * Milestone rewards: +3000 to userbalance when total team deposit reaches each configured threshold
  */
 router.post("/claim-reward", async (req, res) => {
-	const { userId } = req.body;
+	const { userId, threshold } = req.body;
 
 	try {
 		if (!userId) {
 			return res.status(400).json({ success: false, message: "userId is required" });
 		}
 
-		const user = await User.findById(userId).select("_id team userbalance teamDepositRewardClaimed");
+		const requestedThreshold = Number(threshold) || TEAM_DEPOSIT_REWARD_THRESHOLD;
+		if (!TEAM_REWARD_MILESTONES.includes(requestedThreshold)) {
+			return res.status(400).json({
+				success: false,
+				message: "Invalid reward threshold",
+				allowedThresholds: TEAM_REWARD_MILESTONES,
+			});
+		}
+
+		const user = await User.findById(userId).select("_id team userbalance teamDepositRewardClaimed teamDepositRewardClaimedAt teamDepositRewardMilestones");
 		if (!user) {
 			return res.status(404).json({ success: false, message: "User not found" });
 		}
 
-		if (user.teamDepositRewardClaimed) {
+		const claimedMilestones = Array.isArray(user.teamDepositRewardMilestones)
+			? user.teamDepositRewardMilestones
+			: [];
+		const milestoneAlreadyClaimed =
+			claimedMilestones.includes(requestedThreshold) ||
+			(requestedThreshold === TEAM_DEPOSIT_REWARD_THRESHOLD && user.teamDepositRewardClaimed);
+
+		if (milestoneAlreadyClaimed) {
 			return res
 				.status(400)
-				.json({ success: false, message: "Reward already claimed", claimed: true });
+				.json({ success: false, message: "Reward already claimed", claimed: true, threshold: requestedThreshold });
 		}
 
 		const levelMembers = await buildLevelMembers(user);
 		const totalTeamDeposit = calculateTotalTeamDeposit(levelMembers);
-		if (totalTeamDeposit < TEAM_DEPOSIT_REWARD_THRESHOLD) {
+		if (totalTeamDeposit < requestedThreshold) {
 			return res.status(400).json({
 				success: false,
 				message: "Not eligible yet",
 				totalTeamDeposit,
-				threshold: TEAM_DEPOSIT_REWARD_THRESHOLD,
+				threshold: requestedThreshold,
 				claimed: false,
 			});
 		}
 
+		const updateQuery = {
+			_id: userId,
+			teamDepositRewardMilestones: { $ne: requestedThreshold },
+		};
+		if (requestedThreshold === TEAM_DEPOSIT_REWARD_THRESHOLD) {
+			updateQuery.teamDepositRewardClaimed = { $ne: true };
+		}
+
+		const updatePayload = {
+			$inc: { userbalance: TEAM_DEPOSIT_REWARD_AMOUNT },
+			$addToSet: { teamDepositRewardMilestones: requestedThreshold },
+		};
+		if (requestedThreshold === TEAM_DEPOSIT_REWARD_THRESHOLD) {
+			updatePayload.$set = {
+				teamDepositRewardClaimed: true,
+				teamDepositRewardClaimedAt: new Date(),
+			};
+		}
+
 		const updated = await User.findOneAndUpdate(
-			{ _id: userId, teamDepositRewardClaimed: { $ne: true } },
-			{
-				$inc: { userbalance: TEAM_DEPOSIT_REWARD_AMOUNT },
-				$set: {
-					teamDepositRewardClaimed: true,
-					teamDepositRewardClaimedAt: new Date(),
-				},
-			},
+			updateQuery,
+			updatePayload,
 			{ new: true }
-		).select("_id userbalance teamDepositRewardClaimed teamDepositRewardClaimedAt");
+		).select("_id userbalance teamDepositRewardClaimed teamDepositRewardClaimedAt teamDepositRewardMilestones");
 
 		if (!updated) {
 			return res
 				.status(400)
-				.json({ success: false, message: "Reward already claimed", claimed: true });
+				.json({ success: false, message: "Reward already claimed", claimed: true, threshold: requestedThreshold });
 		}
 
 		return res.status(200).json({
@@ -496,7 +538,8 @@ router.post("/claim-reward", async (req, res) => {
 			newBalance: updated.userbalance,
 			claimed: true,
 			totalTeamDeposit,
-			threshold: TEAM_DEPOSIT_REWARD_THRESHOLD,
+			threshold: requestedThreshold,
+			claimedMilestones: updated.teamDepositRewardMilestones || [],
 			claimedAt: updated.teamDepositRewardClaimedAt,
 		});
 	} catch (err) {

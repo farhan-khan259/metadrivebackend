@@ -34,6 +34,22 @@ const PlanSchema = new mongoose.Schema(
 			type: Date,
 			default: null,
 		},
+		dailyEarningHistory: [
+			{
+				dayNumber: {
+					type: Number,
+					required: true,
+				},
+				amount: {
+					type: Number,
+					required: true,
+				},
+				creditedAt: {
+					type: Date,
+					default: Date.now,
+				},
+			},
+		],
 		principalClaimed: {
 			type: Boolean,
 			default: false,
@@ -74,8 +90,7 @@ const PlanSchema = new mongoose.Schema(
 			type: Date,
 			default: function () {
 				const date = new Date(this.startingDate || Date.now());
-				date.setHours(0, 0, 0, 0);
-				date.setDate(date.getDate() + (this.days || 30));
+				date.setDate(date.getDate() + (this.days || 180));
 				return date;
 			},
 		},
@@ -147,9 +162,9 @@ const calculateProfitSchedule = ({ investment, percentage, days }) => {
 	const safeDays = Math.max(1, Number(days) || 1);
 	const safePercentage = Number(percentage) || 0;
 
-	const totalProfit = Math.round(safeInvestment * (safePercentage / 100));
-	const baseDaily = Math.floor(totalProfit / safeDays);
-	const lastDay = totalProfit - baseDaily * (safeDays - 1);
+	const baseDaily = Math.round(safeInvestment * (safePercentage / 100));
+	const totalProfit = baseDaily * safeDays;
+	const lastDay = baseDaily;
 
 	return {
 		totalProfit,
@@ -162,9 +177,10 @@ const calculateProfitSchedule = ({ investment, percentage, days }) => {
 PlanSchema.pre("validate", function (next) {
 	// Parse percentage from string
 	// Profit logic:
-	// - `profitPercentage` represents TOTAL profit over the full plan duration (not daily)
-	// - daily profit is distributed in equal divisions across `days`
-	// - principal (Investment) is returned only when claimed
+	// - `profitPercentage` represents DAILY profit percentage
+	// - daily profit is credited every 24 hours from plan investment time
+	// - total profit = daily profit * plan days
+	// - principal (Investment) is returned only when claimed (legacy flow)
 	if (
 		this.isModified("Investment") ||
 		this.isModified("profitPercentage") ||
@@ -183,10 +199,13 @@ PlanSchema.pre("validate", function (next) {
 		this.totalAmount = (Number(this.Investment) || 0) + (Number(this.returnProfit) || 0);
 	}
 
+	if (!this.days || this.days !== 180) {
+		this.days = 180;
+	}
+
 	// Set endingDate based on days if not provided
 	if (!this.endingDate && this.days) {
 		const date = new Date(this.startingDate || Date.now());
-		date.setHours(0, 0, 0, 0);
 		date.setDate(date.getDate() + this.days);
 		this.endingDate = date;
 	}

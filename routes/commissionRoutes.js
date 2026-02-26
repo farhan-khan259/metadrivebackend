@@ -3,8 +3,9 @@ const router = express.Router();
 const Transaction = require('../models/Transaction');
 const mongoose = require('mongoose');
 
-// Get DAILY plan commission summary for user (legacy path kept)
-router.get('/plan-expire-summary/:userId', async (req, res) => {
+const REBATE_TYPES = ['rebate_commission', 'daily_plan_commission', 'plan_expire_commission'];
+
+const getRebateSummary = async (req, res) => {
     try {
         const { userId } = req.params;
 
@@ -15,11 +16,11 @@ router.get('/plan-expire-summary/:userId', async (req, res) => {
             });
         }
 
-        const planExpireCommissions = await Transaction.aggregate([
+        const rebateCommissions = await Transaction.aggregate([
             {
                 $match: {
                     userId: mongoose.Types.ObjectId(userId),
-                    type: 'daily_plan_commission',
+                    type: { $in: REBATE_TYPES },
                     status: 'completed'
                 }
             },
@@ -34,7 +35,7 @@ router.get('/plan-expire-summary/:userId', async (req, res) => {
 
         res.json({
             success: true,
-            commissions: planExpireCommissions
+            commissions: rebateCommissions
         });
     } catch (error) {
         res.status(500).json({
@@ -42,6 +43,9 @@ router.get('/plan-expire-summary/:userId', async (req, res) => {
             message: error.message
         });
     }
-});
+};
+
+router.get('/rebate-summary/:userId', getRebateSummary);
+router.get('/plan-expire-summary/:userId', getRebateSummary);
 
 module.exports = router;

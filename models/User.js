@@ -31,6 +31,7 @@ const UserSchema = new mongoose.Schema(
 		indirectCommission: { type: Number, default: 0 },
 		extendedCommission: { type: Number, default: 0 },
 		planExpireCommission: { type: Number, default: 0 },
+		rebateCommission: { type: Number, default: 0 },
 
 		// Wallet for additional funds if needed
 		wallet: { type: Number, default: 0 },
@@ -38,6 +39,7 @@ const UserSchema = new mongoose.Schema(
 		// One-time reward: 3k when team deposit (lvl 1-5) reaches 100k
 		teamDepositRewardClaimed: { type: Boolean, default: false },
 		teamDepositRewardClaimedAt: { type: Date, default: null },
+		teamDepositRewardMilestones: { type: [Number], default: [] },
 	},
 	{ timestamps: true }
 );

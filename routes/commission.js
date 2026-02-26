@@ -4,16 +4,19 @@ const router = express.Router();
 const User = require('../models/User');
 const Plan = require('../models/plain');
 const Transaction = require('../models/Transaction');
+const mongoose = require('mongoose');
 
-// Plan expiration commission rates
-const PLAN_EXPIRE_COMMISSION_RATES = {
+// Rebate commission rates
+const REBATE_COMMISSION_RATES = {
     1: 0.04, // 4%
-    2: 0.025, // 2.5%
-    3: 0.015 // 1.5%
+    2: 0.022, // 2.2%
+    3: 0.015, // 1.5%
+    4: 0.012, // 1.2%
+    5: 0.01 // 1%
 };
 
-// Function to distribute commissions when plan expires
-const distributePlanExpireCommission = async (planId) => {
+// Function to distribute rebate commissions
+const distributeRebateCommission = async (planId) => {
     try {
         const plan = await Plan.findById(planId).populate('userId');
         if (!plan) throw new Error('Plan not found');
@@ -21,16 +24,16 @@ const distributePlanExpireCommission = async (planId) => {
         const user = plan.userId;
         const returnProfitAmount = plan.returnProfit || plan.depositAmount; // Use return profit or deposit amount
 
-        // Get upline chain (up to 3 levels)
-        const uplineChain = await getUplineChain(user._id, 3);
+        // Get upline chain (up to 5 levels)
+        const uplineChain = await getUplineChain(user._id, 5);
 
         const commissionTransactions = [];
 
         // Distribute commissions to each level
-        for (let level = 1; level <= 3; level++) {
+        for (let level = 1; level <= 5; level++) {
             const upliner = uplineChain[level - 1];
             if (upliner) {
-                const commissionRate = PLAN_EXPIRE_COMMISSION_RATES[level];
+                const commissionRate = REBATE_COMMISSION_RATES[level];
                 const commissionAmount = returnProfitAmount * commissionRate;
 
                 if (commissionAmount > 0) {
@@ -42,8 +45,8 @@ const distributePlanExpireCommission = async (planId) => {
                     const commissionTransaction = new Transaction({
                         userId: upliner._id,
                         amount: commissionAmount,
-                        type: 'plan_expire_commission',
-                        description: `Level ${level} plan expire commission from ${user.fullName}`,
+                        type: 'rebate_commission',
+                        description: `Level ${level} rebate commission from ${user.fullName}`,
                         status: 'completed',
                         metadata: {
                             fromUserId: user._id,
@@ -63,7 +66,7 @@ const distributePlanExpireCommission = async (planId) => {
 
         return commissionTransactions;
     } catch (error) {
-        console.error('Error distributing plan expire commission:', error);
+        console.error('Error distributing rebate commission:', error);
         throw error;
     }
 };
@@ -90,15 +93,15 @@ const getUplineChain = async (userId, maxLevels = 3) => {
 };
 
 // API endpoint to trigger plan expiration (call this when plan expires)
-router.post('/plan-expire/:planId', async (req, res) => {
+router.post('/rebate/:planId', async (req, res) => {
     try {
         const { planId } = req.params;
 
-        const commissions = await distributePlanExpireCommission(planId);
+        const commissions = await distributeRebateCommission(planId);
 
         res.json({
             success: true,
-            message: 'Plan expire commissions distributed successfully',
+            message: 'Rebate commissions distributed successfully',
             commissions: commissions
         });
     } catch (error) {
@@ -109,16 +112,16 @@ router.post('/plan-expire/:planId', async (req, res) => {
     }
 });
 
-// Get plan expire commission summary for user
-router.get('/plan-expire-summary/:userId', async (req, res) => {
+// Get rebate commission summary for user
+const getRebateSummary = async (req, res) => {
     try {
         const { userId } = req.params;
 
-        const planExpireCommissions = await Transaction.aggregate([
+        const rebateCommissions = await Transaction.aggregate([
             {
                 $match: {
                     userId: mongoose.Types.ObjectId(userId),
-                    type: 'plan_expire_commission',
+                    type: { $in: ['rebate_commission', 'daily_plan_commission', 'plan_expire_commission'] },
                     status: 'completed'
                 }
             },
@@ -133,7 +136,26 @@ router.get('/plan-expire-summary/:userId', async (req, res) => {
 
         res.json({
             success: true,
-            commissions: planExpireCommissions
+            commissions: rebateCommissions
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+router.post('/plan-expire/:planId', async (req, res) => {
+    try {
+        const { planId } = req.params;
+
+        const commissions = await distributeRebateCommission(planId);
+
+        res.json({
+            success: true,
+            message: 'Rebate commissions distributed successfully',
+            commissions: commissions
         });
     } catch (error) {
         res.status(500).json({
@@ -142,5 +164,8 @@ router.get('/plan-expire-summary/:userId', async (req, res) => {
         });
     }
 });
+
+router.get('/rebate-summary/:userId', getRebateSummary);
+router.get('/plan-expire-summary/:userId', getRebateSummary);
 
 module.exports = router;

@@ -7,7 +7,7 @@ const cron = require("node-cron");
 const mongoose = require("mongoose");
 const Plan = require("../models/plain");
 const User = require("../models/User");
-// Note: plan expire commissions are distributed on claim (or other dedicated logic), not in this daily profit cron.
+// Note: rebate commissions are distributed on claim (or other dedicated logic), not in this daily profit cron.
 const { distributeDailyPlanCommission } = require("../utils/commissionLogic");
 
 const startOfDay = (date) => {
@@ -33,15 +33,17 @@ const calculateProfitSchedule = ({ investment, percentageStr, days }) => {
 	const safeInvestment = Number(investment) || 0;
 	const safeDays = Math.max(1, Number(days) || 1);
 
-	const totalProfit = Math.round(safeInvestment * (percentage / 100));
-	const baseDaily = Math.floor(totalProfit / safeDays);
-	const lastDay = totalProfit - baseDaily * (safeDays - 1);
+	const baseDaily = Math.round(safeInvestment * (percentage / 100));
+	const totalProfit = baseDaily * safeDays;
+	const lastDay = baseDaily;
 
 	return { totalProfit, baseDaily, lastDay };
 };
 
-// Run once every 24 hours at midnight - UPDATED: Mark as completed, not expired
-cron.schedule("0 0 * * *", async () => {
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+// Run every 10 minutes and pay only when each plan completes another 24h cycle.
+cron.schedule("*/10 * * * *", async () => {
 	console.log("⏳ Running plan daily profit distribution...");
 
 	try {
@@ -86,14 +88,20 @@ cron.schedule("0 0 * * *", async () => {
 				continue;
 			}
 
-			const daysElapsed = daysBetweenDateOnly(plan.startingDate || plan.createdAt || now, now);
-			// Pay starts after the first full day has elapsed (e.g. plan bought today -> first payout next midnight)
-			const dueDays = Math.min(plan.days || 0, Math.max(0, daysElapsed));
+			const startTime = new Date(plan.startingDate || plan.createdAt || now).getTime();
+			const dueDaysByTime = Math.floor((now.getTime() - startTime) / ONE_DAY_MS);
+			// Pay starts after first full 24h from investment time
+			const dueDays = Math.min(plan.days || 0, Math.max(0, dueDaysByTime));
 			const alreadyPaid = Math.max(0, plan.profitPaidDays || 0);
 			let toPay = dueDays - alreadyPaid;
 			if (toPay <= 0) {
-				// Mark completed if time is up
-				if (plan.status === 'running' && plan.endingDate && now >= plan.endingDate) {
+				// Mark completed only when all days are actually paid
+				if (
+					(plan.profitPaidDays || 0) >= (plan.days || 0) &&
+					plan.status === 'running' &&
+					plan.endingDate &&
+					now >= plan.endingDate
+				) {
 					plan.status = 'completed';
 					plan.completedAt = plan.completedAt || now;
 					plan.planExpired = true;
@@ -116,6 +124,12 @@ cron.schedule("0 0 * * *", async () => {
 					user.userbalance += profitAmount;
 					user.totalEarnings = (user.totalEarnings || 0) + profitAmount;
 					plan.totalEarning = (plan.totalEarning || 0) + profitAmount;
+					plan.dailyEarningHistory = plan.dailyEarningHistory || [];
+					plan.dailyEarningHistory.push({
+						dayNumber: nextDayNumber,
+						amount: profitAmount,
+						creditedAt: now,
+					});
 
 					// Distribute upline commissions DAILY based on this day's profit (graceful failure)
 					try {
