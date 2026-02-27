@@ -5,7 +5,7 @@
 
 const Plan = require("../models/plain");
 const User = require("../models/User");
-const { distributeReferralCommission, distributeDailyPlanCommission } = require("../utils/commissionLogic");
+const { distributeDailyPlanCommission } = require("../utils/commissionLogic");
 
 const parsePercentage = (percentageStr) => {
 	if (!percentageStr) return 0;
@@ -117,15 +117,6 @@ exports.createPlan = async (req, res) => {
 
 		await user.save();
 		await plan.save();
-
-		// ✅ DISTRIBUTE REFERRAL COMMISSIONS ON PLAN PURCHASE (graceful failure)
-		try {
-			await distributeReferralCommission(user, Investment);
-		} catch (commissionErr) {
-			// Log error but don't fail the plan creation (investment is already deducted and plan created)
-			console.error('⚠️ Referral commission distribution failed:', commissionErr.message);
-			console.log('ℹ️ Plan was created but commission distribution encountered an error');
-		}
 
 		res.status(201).json({
 			success: true,
