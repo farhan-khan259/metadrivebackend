@@ -19,6 +19,7 @@ const rebateCommissionRoutes = require('./routes/planExpireCommission');
 const adminRoutes = require("./routes/adminRoutes");
 const announcementRoutes = require("./routes/announcementRoutes");
 const userHistory = require("./routes/userHistory");
+const promoCodeRoutes = require("./routes/promoCode");
 
 const ensureAdminUser = require("./utils/ensureAdminUser");
 
@@ -77,6 +78,7 @@ app.use("/api/bindAccountRoutes", bindRoutes);
 app.use('/api/commission', commissionRoutes); // Only this one
 app.use("/api", adminRoutes);
 app.use("/api", announcementRoutes);
+app.use("/api", promoCodeRoutes);
 
 
 
