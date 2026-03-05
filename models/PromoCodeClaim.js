@@ -22,4 +22,6 @@ const PromoCodeClaimSchema = new mongoose.Schema(
 	{ timestamps: true }
 );
 
+PromoCodeClaimSchema.index({ createdAt: 1 }, { expireAfterSeconds: 86400 });
+
 module.exports = mongoose.model("PromoCodeClaim", PromoCodeClaimSchema);
