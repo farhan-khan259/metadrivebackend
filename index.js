@@ -1,11 +1,11 @@
 
+
 require("dotenv").config(); // ✅ Load environment variables first
 
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const path = require("path");
-const cron = require("node-cron");
 
 // ✅ Import routes
 const authRoutes = require("./routes/user");
@@ -56,6 +56,68 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+
+
+const connectToMongo = async () => {
+	const mongoUris = [process.env.MONGO_URI, process.env.MONGO_URI_DIRECT].filter(Boolean);
+
+	if (mongoUris.length === 0) {
+		throw new Error("MONGO_URI is missing in .env");
+	}
+
+	let lastError;
+	for (let index = 0; index < mongoUris.length; index += 1) {
+		const uri = mongoUris[index];
+
+		try {
+			await mongoose.connect(uri, {
+				serverSelectionTimeoutMS: 15000,
+			});
+
+			if (index === 1) {
+				console.warn("⚠️ MongoDB connected using MONGO_URI_DIRECT fallback");
+			}
+
+			return;
+		} catch (err) {
+			lastError = err;
+
+			const canTryNext = index < mongoUris.length - 1;
+			if (canTryNext) {
+				console.warn("⚠️ Primary MongoDB URI failed, trying fallback URI...");
+				continue;
+			}
+		}
+	}
+
+	throw lastError;
+};
+
+// ✅ MongoDB Connection + Server Startup
+const startServer = async () => {
+	if (!process.env.MONGO_URI && !process.env.MONGO_URI_DIRECT) {
+		console.error("❌ MONGO_URI is missing in .env");
+		process.exit(1);
+	}
+
+	try {
+		await connectToMongo();
+		console.log("✅ MongoDB Connected");
+
+		try {
+			await ensureAdminUser();
+		} catch (seedErr) {
+			console.error("❌ ensureAdminUser failed:", seedErr);
+		}
+
+		const PORT = process.env.PORT || 3005;
+		app.listen(PORT, () => console.log(`🚀 Server started on port ${PORT}`));
+	} catch (err) {
+		console.error("❌ MongoDB Connection Error:", err);
+		process.exit(1);
+	}
+};
 
 // ✅ MongoDB Connection
 mongoose
