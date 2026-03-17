@@ -14,11 +14,10 @@ const bindRoutes = require("./routes/bindAccountRoutes");
 const teamDetailsRoutes = require("./routes/Teamdetails");
 const planRoutes = require("./routes/plain");
 const commissionRoutes = require('./routes/commissionRoutes');
-const rebateCommissionRoutes = require('./routes/planExpireCommission');
 const adminRoutes = require("./routes/adminRoutes");
 const announcementRoutes = require("./routes/announcementRoutes");
 const userHistory = require("./routes/userHistory");
-const promoCodeRoutes = require("./routes/promoCode");
+
 
 const ensureAdminUser = require("./utils/ensureAdminUser");
 
@@ -109,7 +108,6 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // ✅ API Routes
 app.use("/api", authRoutes);
 app.use("/api", userHistory);
-app.use('/api/commissions', rebateCommissionRoutes);
 app.use("/team", teamDetailsRoutes);
 app.use("/api/plans", planRoutes);
 app.use("/api", paymentRoutes);
@@ -117,7 +115,6 @@ app.use("/api/bindAccountRoutes", bindRoutes);
 app.use('/api/commission', commissionRoutes); // Only this one
 app.use("/api", adminRoutes);
 app.use("/api", announcementRoutes);
-app.use("/api", promoCodeRoutes);
 
 
 // ✅ Cron Jobs (auto-run tasks)
