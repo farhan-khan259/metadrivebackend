@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const PromoCode = require("../models/promoCode");
+const PromoCode = require("../models/PromoCode");
 const PromoCodeClaim = require("../models/PromoCodeClaim");
 const User = require("../models/User");
 

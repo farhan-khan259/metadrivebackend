@@ -201,13 +201,17 @@ exports.createDeposit = async (req, res) => {
 			});
 		}
 
-		const payment = new Payment({
+		const paymentData = {
 			user_id,
 			depositsAmount: Number(amount),
 			screenshot,
 			payment_method,
 			depositStatus: "pending",
-		});
+		};
+		if (req.body.transaction_id) {
+			paymentData.transaction_id = req.body.transaction_id;
+		}
+		const payment = new Payment(paymentData);
 
 		await payment.save();
 

@@ -11,6 +11,15 @@ const { REFERRAL_COMMISSION_RATES, MAX_COMMISSION_LEVEL } = require("../utils/co
 const TEAM_DEPOSIT_REWARD_THRESHOLD = 100000;
 const TEAM_DEPOSIT_REWARD_AMOUNT = 3000;
 const TEAM_REWARD_MILESTONES = [100000, 200000, 300000];
+const LEVEL1_TEAM_REWARD_CONFIGS = [
+	{ target: 10, rewardAmount: 1000, title: "Starter Bonus" },
+	{ target: 25, rewardAmount: 2500, title: "Rising Leader Bonus" },
+	{ target: 50, rewardAmount: 6000, title: "Team Builder Bonus" },
+	{ target: 100, rewardAmount: 15000, title: "Leader Bonus" },
+	{ target: 200, rewardAmount: 30000, title: "Mega Leader Bonus" },
+];
+
+const VALID_LEVEL1_PLAN_STATUSES = ["running", "completed", "claimed", "expired"];
 
 async function buildLevelMembers(user) {
 	const userSelectFields =
@@ -65,6 +74,54 @@ function calculateTotalTeamDeposit(levelMembers) {
 		}
 	}
 	return total;
+}
+
+async function getLevel1ValidMemberData(level1Members) {
+	if (!Array.isArray(level1Members) || level1Members.length === 0) {
+		return {
+			validMemberIds: [],
+			validMembers: [],
+		};
+	}
+
+	const level1Ids = level1Members.map((member) => member._id);
+	const activePlanUserIds = await Plan.distinct("user_id", {
+		user_id: { $in: level1Ids },
+		Investment: { $gt: 0 },
+		status: { $in: VALID_LEVEL1_PLAN_STATUSES },
+	});
+
+	const activeSet = new Set(activePlanUserIds.map((id) => id.toString()));
+	const validMembers = level1Members.filter((member) =>
+		activeSet.has(member._id.toString())
+	);
+
+	return {
+		validMemberIds: [...activeSet],
+		validMembers,
+	};
+}
+
+function buildLevel1RewardProgress(validCount, claimedTargets = []) {
+	const claimedSet = new Set(claimedTargets.map((value) => Number(value)));
+
+	return LEVEL1_TEAM_REWARD_CONFIGS.map((reward) => {
+		const target = Number(reward.target);
+		const progressCount = Math.min(validCount, target);
+		const progressPercent = target > 0 ? Math.min(100, Math.round((progressCount / target) * 100)) : 0;
+		const claimed = claimedSet.has(target);
+		const canClaim = !claimed && validCount >= target;
+
+		return {
+			target,
+			rewardAmount: Number(reward.rewardAmount || 0),
+			title: reward.title,
+			progressCount,
+			progressPercent,
+			claimed,
+			canClaim,
+		};
+	});
 }
 
 /**
@@ -348,6 +405,7 @@ router.post("/", async (req, res) => {
 				teamDepositRewardClaimed: user.teamDepositRewardClaimed || false,
 				teamDepositRewardClaimedAt: user.teamDepositRewardClaimedAt || null,
 				teamDepositRewardMilestones: normalizedClaimedMilestones,
+				level1TeamRewardClaimedTargets: user.level1TeamRewardClaimedTargets || [],
 			},
 			directReferrals: {
 				members: directStats.membersWithPayments,
@@ -445,6 +503,145 @@ router.post("/", async (req, res) => {
 		});
 	} catch (err) {
 		console.error("❌ Error in /team route:", err);
+		return res.status(500).json({ success: false, message: err.message || "Server error" });
+	}
+});
+
+/**
+ * POST /team/level1-rewards
+ * Level-1 valid member rewards based on direct referrals with activated plans only.
+ */
+router.post("/level1-rewards", async (req, res) => {
+	const { userId } = req.body;
+
+	try {
+		if (!userId) {
+			return res.status(400).json({ success: false, message: "userId is required" });
+		}
+
+		const user = await User.findById(userId).select("_id team fullName level1TeamRewardClaimedTargets userbalance");
+		if (!user) {
+			return res.status(404).json({ success: false, message: "User not found" });
+		}
+
+		const levelMembers = await buildLevelMembers(user);
+		const level1Members = levelMembers[1] || [];
+		const { validMembers } = await getLevel1ValidMemberData(level1Members);
+
+		const claimedTargets = Array.isArray(user.level1TeamRewardClaimedTargets)
+			? user.level1TeamRewardClaimedTargets
+			: [];
+
+		return res.status(200).json({
+			success: true,
+			user: {
+				_id: user._id,
+				fullName: user.fullName,
+				userbalance: Number(user.userbalance || 0),
+				level1TeamRewardClaimedTargets: claimedTargets,
+			},
+			level1Stats: {
+				totalDirectMembers: level1Members.length,
+				validMembersCount: validMembers.length,
+				invalidMembersCount: Math.max(level1Members.length - validMembers.length, 0),
+			},
+			rewards: buildLevel1RewardProgress(validMembers.length, claimedTargets),
+		});
+	} catch (err) {
+		console.error("❌ Error in /team/level1-rewards:", err);
+		return res.status(500).json({ success: false, message: err.message || "Server error" });
+	}
+});
+
+/**
+ * POST /team/claim-level1-reward
+ * Claim level-1 direct referral reward once target is completed.
+ */
+router.post("/claim-level1-reward", async (req, res) => {
+	const { userId, target } = req.body;
+
+	try {
+		if (!userId) {
+			return res.status(400).json({ success: false, message: "userId is required" });
+		}
+
+		const normalizedTarget = Number(target);
+		const rewardConfig = LEVEL1_TEAM_REWARD_CONFIGS.find(
+			(item) => Number(item.target) === normalizedTarget
+		);
+
+		if (!rewardConfig) {
+			return res.status(400).json({
+				success: false,
+				message: "Invalid target",
+				allowedTargets: LEVEL1_TEAM_REWARD_CONFIGS.map((item) => item.target),
+			});
+		}
+
+		const user = await User.findById(userId).select("_id team userbalance level1TeamRewardClaimedTargets fullName");
+		if (!user) {
+			return res.status(404).json({ success: false, message: "User not found" });
+		}
+
+		const claimedTargets = Array.isArray(user.level1TeamRewardClaimedTargets)
+			? user.level1TeamRewardClaimedTargets.map((value) => Number(value))
+			: [];
+		if (claimedTargets.includes(normalizedTarget)) {
+			return res.status(400).json({
+				success: false,
+				message: "Reward already claimed",
+				claimed: true,
+				target: normalizedTarget,
+			});
+		}
+
+		const levelMembers = await buildLevelMembers(user);
+		const level1Members = levelMembers[1] || [];
+		const { validMembers } = await getLevel1ValidMemberData(level1Members);
+		const validMembersCount = validMembers.length;
+
+		if (validMembersCount < normalizedTarget) {
+			return res.status(400).json({
+				success: false,
+				message: "Target not completed yet",
+				claimed: false,
+				target: normalizedTarget,
+				validMembersCount,
+			});
+		}
+
+		const updated = await User.findOneAndUpdate(
+			{
+				_id: userId,
+				level1TeamRewardClaimedTargets: { $ne: normalizedTarget },
+			},
+			{
+				$inc: { userbalance: Number(rewardConfig.rewardAmount || 0) },
+				$addToSet: { level1TeamRewardClaimedTargets: normalizedTarget },
+			},
+			{ new: true }
+		).select("_id userbalance fullName level1TeamRewardClaimedTargets");
+
+		if (!updated) {
+			return res.status(400).json({
+				success: false,
+				message: "Reward already claimed",
+				claimed: true,
+				target: normalizedTarget,
+			});
+		}
+
+		return res.status(200).json({
+			success: true,
+			message: "Reward claimed successfully",
+			target: normalizedTarget,
+			rewardAmount: Number(rewardConfig.rewardAmount || 0),
+			newBalance: Number(updated.userbalance || 0),
+			claimedTargets: updated.level1TeamRewardClaimedTargets || [],
+			validMembersCount,
+		});
+	} catch (err) {
+		console.error("❌ Error in /team/claim-level1-reward:", err);
 		return res.status(500).json({ success: false, message: err.message || "Server error" });
 	}
 });

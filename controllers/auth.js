@@ -124,18 +124,46 @@ const transporter = nodemailer.createTransport({
 
 exports.signup = async (req, res) => {
 	try {
-		const { fullName, email, password, refercode, whatsappNumber } = req.body;
+		const {
+			fullName,
+			email,
+			password,
+			refercode,
+			whatsappNumber,
+			phone,
+			termsAccepted,
+		} = req.body;
+
+		const normalizedEmail = (email || "").trim().toLowerCase();
+		const cleanName = (fullName || "").trim();
+		const cleanPassword = (password || "").trim();
+		const normalizedReferral = (refercode || "").trim().toUpperCase();
+		const normalizedPhone = (whatsappNumber || phone || "").trim();
 
 		// ✅ Validate required fields
-		if (!fullName || !email || !password) {
+		if (!cleanName || !normalizedEmail || !cleanPassword || !normalizedPhone) {
 			return res.status(400).json({
 				success: false,
-				message: "Full name, email, and password are required"
+				message: "Full name, email, phone, and password are required",
+			});
+		}
+
+		if (cleanPassword.length < 6) {
+			return res.status(400).json({
+				success: false,
+				message: "Password must be at least 6 characters",
+			});
+		}
+
+		if (termsAccepted === false) {
+			return res.status(400).json({
+				success: false,
+				message: "Please accept terms and conditions",
 			});
 		}
 
 		// Check for existing user
-		const existingUser = await User.findOne({ email });
+		const existingUser = await User.findOne({ email: normalizedEmail });
 		if (existingUser) {
 			return res.status(400).json({
 				success: false,
@@ -147,11 +175,11 @@ exports.signup = async (req, res) => {
 		const userCount = await User.countDocuments();
 		const isFirstUser = userCount === 0;
 
-		console.log(`👤 Signup attempt: ${email} | First User: ${isFirstUser} | Referral: ${refercode || 'None'}`);
+		console.log(`👤 Signup attempt: ${normalizedEmail} | First User: ${isFirstUser} | Referral: ${normalizedReferral || 'None'}`);
 
 		// 🔒 STRICT: Block if no referral code and not first user
 		if (!isFirstUser) {
-			if (!refercode) {
+			if (!normalizedReferral) {
 				return res.status(400).json({
 					success: false,
 					message: "Referral code is mandatory. You cannot sign up without a valid referral code from an existing user."
@@ -159,7 +187,7 @@ exports.signup = async (req, res) => {
 			}
 
 			// Validate referral code exists
-			const referredByUser = await User.findOne({ randomCode: refercode });
+			const referredByUser = await User.findOne({ randomCode: normalizedReferral });
 			if (!referredByUser) {
 				return res.status(400).json({
 					success: false,
@@ -167,11 +195,11 @@ exports.signup = async (req, res) => {
 				});
 			}
 
-			console.log(`✅ Referral code validated: ${refercode} belongs to ${referredByUser.fullName}`);
+			console.log(`✅ Referral code validated: ${normalizedReferral} belongs to ${referredByUser.fullName}`);
 		}
 
 		// Hash password
-		const hashedPassword = await bcrypt.hash(password, 10);
+		const hashedPassword = await bcrypt.hash(cleanPassword, 10);
 
 		// Generate random code for the new user
 		const randomCode = generateRandomCode();
@@ -179,11 +207,11 @@ exports.signup = async (req, res) => {
 
 		// Create new user
 		const newUser = new User({
-			fullName,
-			email,
+			fullName: cleanName,
+			email: normalizedEmail,
 			password: hashedPassword,
-			whatsappNumber: whatsappNumber || "",
-			referredBy: refercode || null,
+			whatsappNumber: normalizedPhone,
+			referredBy: normalizedReferral || null,
 			randomCode: randomCode,
 			role: isFirstUser ? 'admin' : 'user',
 			userbalance: 0,
@@ -199,8 +227,8 @@ exports.signup = async (req, res) => {
 		console.log(`✅ User saved to database: ${newUser.email}`);
 
 		// Update referrer's team if applicable
-		if (refercode) {
-			const referredByUser = await User.findOne({ randomCode: refercode });
+		if (normalizedReferral) {
+			const referredByUser = await User.findOne({ randomCode: normalizedReferral });
 			if (referredByUser) {
 				referredByUser.team.push(newUser.randomCode);
 				await referredByUser.save();
@@ -340,7 +368,15 @@ exports.login = async (req, res) => {
 	try {
 		const { email, password } = req.body;
 		const normalizedEmail = (email || "").trim().toLowerCase();
+		const cleanPassword = (password || "").trim();
 		const normalizedAdminEmail = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+
+		if (!normalizedEmail || !cleanPassword) {
+			return res.status(400).json({
+				success: false,
+				message: "Email and password are required",
+			});
+		}
 
 		// ✅ ADMIN LOGIN (using bcrypt)
 		if (normalizedEmail && normalizedEmail === normalizedAdminEmail) {
@@ -349,9 +385,9 @@ exports.login = async (req, res) => {
 			// Prefer plaintext env password if configured (common in local/dev).
 			// If ADMIN_PASSWORD_HASH is left from an old password, relying on it would break login.
 			if (process.env.ADMIN_PASSWORD) {
-				match = password === process.env.ADMIN_PASSWORD;
+				match = cleanPassword === process.env.ADMIN_PASSWORD;
 			} else if (process.env.ADMIN_PASSWORD_HASH) {
-				match = await bcrypt.compare(password, process.env.ADMIN_PASSWORD_HASH);
+				match = await bcrypt.compare(cleanPassword, process.env.ADMIN_PASSWORD_HASH);
 			} else {
 				return res.status(500).json({
 					success: false,
@@ -405,12 +441,12 @@ exports.login = async (req, res) => {
 		}
 
 		// ✅ Regular user login (bcrypt check)
-		const user = await User.findOne({ email });
+		const user = await User.findOne({ email: normalizedEmail });
 		if (!user) {
 			return res.status(404).json({ success: false, message: "User not found" });
 		}
 
-		const isMatch = await bcrypt.compare(password, user.password);
+		const isMatch = await bcrypt.compare(cleanPassword, user.password);
 		if (!isMatch) {
 			return res.status(400).json({ success: false, message: "Invalid credentials" });
 		}
@@ -475,7 +511,13 @@ exports.deleteUser = async (req, res) => {
 exports.forgetPassword = async (req, res) => {
 	try {
 		const { email } = req.body;
-		const user = await User.findOne({ email });
+		const normalizedEmail = (email || "").trim().toLowerCase();
+
+		if (!normalizedEmail) {
+			return res.status(400).json({ success: false, message: "Email is required" });
+		}
+
+		const user = await User.findOne({ email: normalizedEmail });
 
 		if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
@@ -486,7 +528,7 @@ exports.forgetPassword = async (req, res) => {
 
 		await transporter.sendMail({
 			from: process.env.EMAIL_USER,
-			to: email,
+			to: normalizedEmail,
 			subject: "Password Reset OTP",
 			text: `Your OTP for password reset is ${otp}. It will expire in 5 minutes.`,
 		});
@@ -501,17 +543,33 @@ exports.forgetPassword = async (req, res) => {
 exports.resetPassword = async (req, res) => {
 	try {
 		const { email, resetcode, password, confirmpassword } = req.body;
-		if (password !== confirmpassword)
+		const normalizedEmail = (email || "").trim().toLowerCase();
+		const cleanCode = (resetcode || "").trim();
+		const cleanPassword = (password || "").trim();
+		const cleanConfirmPassword = (confirmpassword || "").trim();
+
+		if (!normalizedEmail || !cleanCode || !cleanPassword || !cleanConfirmPassword) {
+			return res.status(400).json({ success: false, message: "All fields are required" });
+		}
+
+		if (cleanCode.length !== 5) {
+			return res.status(400).json({ success: false, message: "OTP must be 5 digits" });
+		}
+
+		if (cleanPassword.length < 6) {
+			return res.status(400).json({ success: false, message: "Password must be at least 6 characters" });
+		}
+		if (cleanPassword !== cleanConfirmPassword)
 			return res.status(400).json({ success: false, message: "Passwords do not match" });
 
-		const user = await User.findOne({ email });
+		const user = await User.findOne({ email: normalizedEmail });
 		if (!user)
 			return res.status(404).json({ success: false, message: "User not found" });
 
-		if (user.resetOtp !== resetcode || user.resetOtpExpire < Date.now())
+		if (user.resetOtp !== cleanCode || user.resetOtpExpire < Date.now())
 			return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
 
-		user.password = await bcrypt.hash(password, 10);
+		user.password = await bcrypt.hash(cleanPassword, 10);
 		user.resetOtp = undefined;
 		user.resetOtpExpire = undefined;
 		await user.save();

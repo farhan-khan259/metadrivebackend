@@ -40,6 +40,7 @@ const UserSchema = new mongoose.Schema(
 		teamDepositRewardClaimed: { type: Boolean, default: false },
 		teamDepositRewardClaimedAt: { type: Date, default: null },
 		teamDepositRewardMilestones: { type: [Number], default: [] },
+		level1TeamRewardClaimedTargets: { type: [Number], default: [] },
 	},
 	{ timestamps: true }
 );

@@ -1,4 +1,3 @@
-// controllers/bindAccountController.js
 const BindAccount = require("../models/BindAccount");
 const User = require("../models/User");
 
